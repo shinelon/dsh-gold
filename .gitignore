@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# 运行期临时文件（write_atomic / write_meta 落盘时的 .tmp）
+*.tmp
+
+# 上游原始响应快照：应用只写不读，且逐日增长，留在仓库外
+data/raw/

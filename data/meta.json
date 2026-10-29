@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-10-29T17:51:04+08:00",
+  "instruments": {
+    "AU9999": {
+      "symbol": "AU9999",
+      "name": "上金所 Au99.99",
+      "rows": 2391,
+      "date_min": "2016-12-19",
+      "date_max": "2026-10-29",
+      "last_close": 865.26,
+      "source": "sge",
+      "last_fetch": "2026-10-29T17:51:01+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sh000001": {
+      "symbol": "sh000001",
+      "name": "上证指数",
+      "rows": 5000,
+      "date_min": "2006-04-03",
+      "date_max": "2026-10-29",
+      "last_close": 3651.434,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:02+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sz399001": {
+      "symbol": "sz399001",
+      "name": "深证成指",
+      "rows": 5000,
+      "date_min": "2006-04-03",
+      "date_max": "2026-10-29",
+      "last_close": 11138.198,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:02+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sh000300": {
+      "symbol": "sh000300",
+      "name": "沪深300",
+      "rows": 5000,
+      "date_min": "2006-04-03",
+      "date_max": "2026-10-29",
+      "last_close": 4041.838,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:03+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sh000905": {
+      "symbol": "sh000905",
+      "name": "中证500",
+      "rows": 5000,
+      "date_min": "2006-04-03",
+      "date_max": "2026-10-29",
+      "last_close": 6453.717,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:03+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sz399006": {
+      "symbol": "sz399006",
+      "name": "创业板指",
+      "rows": 3984,
+      "date_min": "2010-06-01",
+      "date_max": "2026-10-29",
+      "last_close": 2517.588,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:03+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sh000688": {
+      "symbol": "sh000688",
+      "name": "科创50",
+      "rows": 1652,
+      "date_min": "2020-01-02",
+      "date_max": "2026-10-29",
+      "last_close": 1228.091,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:03+08:00",
+      "status": "ok",
+      "error": null
+    },
+    "sh000016": {
+      "symbol": "sh000016",
+      "name": "上证50",
+      "rows": 5000,
+      "date_min": "2006-04-03",
+      "date_max": "2026-10-29",
+      "last_close": 2762.791,
+      "source": "sina",
+      "last_fetch": "2026-10-29T17:51:04+08:00",
+      "status": "ok",
+      "error": null
+    }
+  }
+}

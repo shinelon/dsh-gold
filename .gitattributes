@@ -1,0 +1,9 @@
+# 统一 LF：本机全局 core.autocrlf=true，若不声明会把源码检出成 CRLF
+* text=auto eol=lf
+
+# 行情与元数据要求字节稳定，禁止任何行尾转换
+*.jsonl -text
+*.json  -text
+
+# 二进制，不做 diff
+*.png binary

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上海黄金 × A股指数 · 数据工作台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>上海黄金 × A股指数</h1>
+    <span class="sub">数据工作台 · 金股联动 / 量能 / 状态识别</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="statusText">连接中…</span>
+  </div>
+  <button id="refreshBtn" title="立即抓取最新数据">刷新数据</button>
+</header>
+
+<div class="wrap">
+  <div class="banner" id="banner"></div>
+
+  <div class="controls">
+    <div class="ctl-group">
+      <span class="ctl-label">对比指数</span>
+      <div id="symbolChips" class="ctl-group" style="gap:5px;flex-wrap:wrap"></div>
+    </div>
+
+    <div class="ctl-group">
+      <span class="ctl-label">主看</span>
+      <select id="primarySelect"></select>
+    </div>
+
+    <div class="ctl-group">
+      <span class="ctl-label">区间</span>
+      <div class="seg" id="rangeSeg">
+        <button data-range="1y">1年</button>
+        <button data-range="2y" class="on">2年</button>
+        <button data-range="3y">3年</button>
+        <button data-range="5y">5年</button>
+        <button data-range="all">全部</button>
+      </div>
+      <input type="date" id="customStart" title="自定义起始日">
+      <input type="date" id="customEnd" title="自定义结束日">
+    </div>
+
+    <div class="ctl-group">
+      <span class="ctl-label">滚动窗口</span>
+      <select id="windowSelect">
+        <option value="20">20 日</option>
+        <option value="60" selected>60 日</option>
+        <option value="120">120 日</option>
+      </select>
+    </div>
+  </div>
+
+  <section class="cards" id="cards"></section>
+
+  <section class="grid">
+    <div class="panel span12">
+      <div class="panel-head">
+        <h2>走势对比（归一到 100）</h2>
+        <span class="hint">悬停查看原始点位</span>
+        <span class="right" id="priceRange"></span>
+      </div>
+      <div class="chart tall" id="chartPrice"></div>
+    </div>
+
+    <div class="panel span8">
+      <div class="panel-head">
+        <h2>与黄金的滚动相关性</h2>
+        <span class="hint">日收益率 Pearson 相关</span>
+        <span class="right" id="rollWindow"></span>
+      </div>
+      <div class="chart" id="chartRolling"></div>
+    </div>
+
+    <div class="panel span4">
+      <div class="panel-head">
+        <h2>相关系数矩阵</h2>
+        <span class="hint">区间内全样本</span>
+      </div>
+      <div class="chart" id="chartHeat"></div>
+    </div>
+
+    <div class="panel span6">
+      <div class="panel-head">
+        <h2>领先滞后</h2>
+        <span class="hint" id="leadLagHint">正滞后 = 指数领先黄金</span>
+        <span class="right" id="leadLagSymbol"></span>
+      </div>
+      <div class="chart short" id="chartLeadLag"></div>
+    </div>
+
+    <div class="panel span6">
+      <div class="panel-head">
+        <h2>相对强弱背离</h2>
+        <span class="hint">ln(金) − ln(指数) 滚动 z</span>
+        <span class="right" id="diverSymbol"></span>
+      </div>
+      <div class="chart short" id="chartDivergence"></div>
+    </div>
+
+    <div class="panel span12">
+      <div class="panel-head">
+        <h2>量能</h2>
+        <span class="hint">成交量 / 均量 / 量比</span>
+        <span class="right" id="volumeSymbol"></span>
+      </div>
+      <div class="chart" id="chartVolume"></div>
+    </div>
+
+    <div class="panel span8">
+      <div class="panel-head">
+        <h2>市场状态时间轴</h2>
+        <span class="hint">多头 / 震荡 / 空头</span>
+        <span class="right" id="regimeHint"></span>
+      </div>
+      <div class="chart" id="chartRegime"></div>
+    </div>
+
+    <div class="panel span4">
+      <div class="panel-head">
+        <h2>状态统计</h2>
+        <span class="hint" id="statsSymbol"></span>
+      </div>
+      <div class="table-wrap" id="statsTable"></div>
+      <div class="panel-head" style="padding-top:6px">
+        <h2 style="font-size:11.5px;color:var(--muted)">状态转移概率</h2>
+      </div>
+      <div class="table-wrap" id="transTable"></div>
+    </div>
+
+    <div class="panel span12">
+      <div class="panel-head">
+        <h2>预警</h2>
+        <span class="hint">相对强弱背离 · 量价异动</span>
+        <span class="right" id="alertCount"></span>
+      </div>
+      <div class="alerts" id="alerts"></div>
+    </div>
+  </section>
+
+  <div class="footnote">
+    数据来源：黄金 <code>上海黄金交易所 sge.com.cn</code>（Au99.99 现货，元/克）；
+    指数 <code>新浪财经</code>（二手转载，日线）。
+    存储为 <code>data/bars/*.jsonl</code> 纯文本，原始响应快照归档于 <code>data/raw/</code>。
+    指数历史成交额不可得，量能仅基于成交量。
+    本工具仅用于观察市场，<b>不构成投资建议</b>。
+  </div>
+</div>
+
+<div class="loading" id="loading"><div class="spinner"></div></div>
+
+<script src="/static/vendor/echarts.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
