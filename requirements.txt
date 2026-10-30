@@ -1,0 +1,6 @@
+# 运行时依赖（实测环境：Windows 11 / Python 3.15.2，均为预编译 wheel）
+# 安装：py -m pip install -r requirements.txt
+pandas>=2.0
+numpy>=1.26
+# Windows 没有系统时区库，ZoneInfo("Asia/Shanghai") 依赖此包，缺了 import 阶段就会崩
+tzdata>=2024.1

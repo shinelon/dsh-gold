@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 from urllib.parse import parse_qs, unquote, urlparse
 from zoneinfo import ZoneInfo
 
@@ -388,15 +389,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _probe_port(host: str, port: int) -> int | None:
+    """端口空闲则返回端口号，被占用返回 None。
+
+    刻意用「连一下」而不是「bind 一下」来探测：Windows 的 SO_REUSEADDR 允许
+    两个进程绑同一端口（后绑的会抢走连接），所以 bind 探测在这里恒成功，
+    「被占用就顺延」等于没实现——实测两个实例会同时"启动成功"、其中一个变僵尸。
+    connect 探测同时天然绕开 TIME_WAIT，重启时不会误判端口被占。
+    """
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.bind((host, port))
-        except OSError:
-            return None
-    return port
+        sock.settimeout(0.3)
+        in_use = sock.connect_ex((host, port)) == 0
+    return None if in_use else port
 
 
 def pick_port(host: str, preferred: int, scan: int = config.PORT_SCAN) -> int:
@@ -413,13 +418,21 @@ def make_server(host: str, port: int, state: AppState) -> ThreadingHTTPServer:
     return httpd
 
 
-def serve(host: str = config.HOST, port: int = config.DEFAULT_PORT, refresh: bool = True) -> None:
+def serve(
+    host: str = config.HOST,
+    port: int = config.DEFAULT_PORT,
+    refresh: bool = True,
+    on_ready: Callable[[str], None] | None = None,
+) -> None:
     config.ensure_dirs()
     state = AppState(refresh=refresh)
 
+    requested = port
     port = pick_port(host, port)
-    if port != config.DEFAULT_PORT:
-        log.warning("端口 %d 被占用，改用 %d", config.DEFAULT_PORT, port)
+    if port != requested:
+        # 必须和「请求的端口」比较，而不是 config.DEFAULT_PORT：
+        # 用户显式 --port 8899 时若拿默认端口比，会报出「8770 被占用」的假消息。
+        log.warning("端口 %d 被占用，改用 %d", requested, port)
 
     httpd = make_server(host, port, state)
     state.start_refresh_loop()
@@ -428,6 +441,8 @@ def serve(host: str = config.HOST, port: int = config.DEFAULT_PORT, refresh: boo
     log.info("服务已启动: %s", url)
     print(f"\n  上海黄金 × A股指数 数据工作台")
     print(f"  {url}\n  按 Ctrl+C 停止\n", flush=True)
+    if on_ready is not None:
+        on_ready(url)  # 把真实 URL 交回调用方，供 --open 使用（端口可能已顺延）
 
     try:
         httpd.serve_forever()

@@ -49,7 +49,7 @@ class APITestCase(unittest.TestCase):
         cls.state = server.AppState(refresh=False)
         cls.state.store.bars = synth_bars()
         cls.state.store.generation += 1
-        cls.state.instruments_meta = {}
+        cls.state.store.instruments_meta = {}
         cls.state._panels = None
         cls.state._panels_gen = -1
         cls.state._cache = {}
@@ -68,14 +68,19 @@ class APITestCase(unittest.TestCase):
         request = urllib.request.Request(url, method=method)
         try:
             with urllib.request.urlopen(request, timeout=30) as resp:
-                body = resp.read()
-                return resp.status, json.loads(body) if body else None
+                return resp.status, self._decode(resp.read())
         except urllib.error.HTTPError as exc:
-            body = exc.read()
-            try:
-                return exc.code, json.loads(body)
-            except (json.JSONDecodeError, ValueError):
-                return exc.code, None
+            return exc.code, self._decode(exc.read())
+
+    @staticmethod
+    def _decode(body: bytes):
+        """只有 API 返回 JSON；`/` 与 `/static/*` 是 HTML/JS，解析失败就原样返回。"""
+        if not body:
+            return None
+        try:
+            return json.loads(body)
+        except (json.JSONDecodeError, ValueError):
+            return body
 
     # -- 正常路径
 

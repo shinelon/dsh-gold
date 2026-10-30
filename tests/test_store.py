@@ -170,9 +170,15 @@ class TestStoreUpsert(unittest.TestCase):
         self.assertIn("boom", self.store.instruments_meta["X"]["error"])
 
     def test_meta_payload_stale_flag(self):
-        self.store.upsert("X", [rec("X", "2020-01-01")])
+        # meta_payload 只输出 config.ORDER 里的标的，用 "X" 这种临时符号它不会出现
+        self.store.upsert(config.GOLD, [rec(config.GOLD, "2020-01-01")])
         payload = self.store.meta_payload()
-        self.assertTrue(any(i["symbol"] == "X" for i in payload["instruments"]))
+        gold = next(i for i in payload["instruments"] if i["symbol"] == config.GOLD)
+        self.assertEqual(gold["rows"], 1)
+        self.assertFalse(gold["stale"])  # 刚抓过，不该标过期
+        others = [i for i in payload["instruments"] if i["symbol"] != config.GOLD]
+        self.assertTrue(all(i["stale"] for i in others))  # 没抓过的必须标过期
+        self.assertTrue(payload["stale"])
 
 
 class TestSummarize(unittest.TestCase):

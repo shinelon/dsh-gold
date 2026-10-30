@@ -22,11 +22,12 @@ python -m unittest tests.test_store.TestMerge.test_new_wins   # 单用例
 
 ### 环境
 
-- Python **3.10+**（代码用了 `X | None` 与 `from __future__ import annotations`；现有 `__pycache__` 为 3.12）。
-- 依赖仅三个，但**没有 requirements.txt**，需自行安装：
+- Python **3.10+**（代码用了 `X | None` 与 `from __future__ import annotations`）。已在 **Python 3.15.2 + pandas 3.1.0 + numpy 2.5.4** 上跑通全部测试，pandas 3.x 的破坏性变更对本项目无影响。
+- 依赖见 `requirements.txt`：
   ```bash
-  pip install pandas numpy tzdata
+  py -m pip install -r requirements.txt
   ```
+- 国内网络直连 PyPI 常卡在下载阶段（实测 pandas 的 10.9 MB wheel 停在半途不动），可临时加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`，不要为此改全局 pip 配置。
 - `tzdata` 不是可选项：`sources.py:27`、`store.py:23`、`server.py:25` 都调用 `ZoneInfo("Asia/Shanghai")`，Windows 无系统时区库，缺包会在 import 阶段直接崩。
 - Web 端只依赖 `web/vendor/echarts.min.js`（已内置），不要引入 CDN 或前端框架。
 
@@ -133,29 +134,34 @@ python run.py test -v
 
 ## 7. 已知问题与技术债（评审结论，按优先级）
 
-**P1 · 会造成误判或异常**
+**已修复（2026-10-30）**
 
-1. `run.py:40` `--open` 打开的是 `args.port`，但 `server.pick_port()` 在端口被占用时会顺延，实际端口可能不同 → 打开空页面。修法：让 `serve()` 返回真实端口（或用回调）后再 `webbrowser.open`。
-2. `server.py:90-91` `if not self.refreshing: pass` 是死代码，说明这里原本打算做重入保护但没有写。`refresh_once()` 目前**无重入保护**：后台 `refresh-loop` 与 `/api/refresh` 触发的线程可能同时抓取，导致重复写盘与 `generation` 抖动。应在 `refresh_once` 入口用锁做「已在跑就返回」。
-3. `server.py:116-127` `refresh_async()` 是 check-then-act（先查 `refreshing` 再起线程，标志在线程内才置位），两次快速点击会并发。
-4. `config.py:111` + `server.py:129-133`：`STALE_AFTER_SEC=3h`，但自动刷新只在工作日 9:00–16:30 的窗口内进行。**每个交易日 19:30 之后、以及整个周末，`stale` 必为真**，前端会弹「部分数据可能已过期」。这是误报，不是数据真的坏了。要么把 `stale` 判定改成「按交易日历对齐最近收盘」，要么放宽阈值。
+- **端口探测在 Windows 上完全失效（最严重）**：`_probe_port()` 原本用 `SO_REUSEADDR` 做 bind 探测，而 Windows 该选项**允许两个进程绑同一端口**，导致探测恒成功、「被占用就顺延」从未生效。实测两个实例都打印「服务已启动: 8899」，后启动的抢走连接、先启动的变僵尸。已改为 connect 探测，顺带避开 TIME_WAIT 误判。
+- **顺延提示串了端口**：`serve()` 拿 `config.DEFAULT_PORT` 而非请求端口做比较，传 `--port 8899` 时误报「8770 被占用」。已改为与请求端口比较。
+- **`--open` 打开错误端口**：原用 `args.port`，端口顺延后打开空页面。已给 `serve()` 加 `on_ready(url)` 回调，由 `run.py` 用真实 URL 打开。
+- **测试自身有 4 处错误**（此前从未被真正跑过）：`test_api.req()` 对 HTML/JS 也做 `json.loads`；`test_store` 用 `config.ORDER` 之外、根本不存在的符号 `"X"` 断言 `meta_payload`；`test_analytics` 里 `int(Series)` 死代码；`test_api` 把 `instruments_meta` 挂到了 `AppState` 而不是 `store` 上。均已修，现 85/85 通过。
+- **`store.write_meta()` 漏写 `newline="\n"`**：Windows 下 `meta.json` 写成 CRLF，与 `*.jsonl` 的 LF 契约不一致，每次刷新产生整文件 diff。已修。
+
+**仍待修 · P1**
+
+1. `refresh_once()` 开了头却写了个 `if not self.refreshing: pass` 的空分支，说明重入保护忘了写。目前**无重入保护**：后台 `refresh-loop` 与 `/api/refresh` 触发的线程可能同时抓取，造成重复写盘与 `generation` 抖动。应在入口用锁做「已在跑就返回」。
+2. `refresh_async()` 是 check-then-act（先查 `refreshing` 再起线程，标志在线程内才置位），连点两次会并发。
+3. `config.STALE_AFTER_SEC=3h` + 「只在工作日 9:00–16:30 刷新」⇒ **每个交易日 19:30 之后、以及整个周末 `stale` 必为真**，前端会弹「部分数据可能已过期」。这是误报。应改成按交易日历对齐最近收盘，或放宽阈值。
 
 **P2 · 健壮性 / 一致性**
 
-5. `server.py:292-300` `_symbols_param()` 不去重。`?symbols=sh000300,sh000300` 会让相关矩阵拿到重复标签（`mat.loc[a,b]` 退化成 DataFrame，被 `_num` 的 `except TypeError` 吞成 `null`），同时 `alerts`、`rolling` 重复计算一遍。加一句去重即可，别依赖下游容错。
-6. `server.py:345-348` 拿到的是缓存里的**同一个 dict 对象**，随后 `payload["refreshing"]=...` 属于原地修改缓存项，且在锁外。建议返回 `dict(payload)` 副本。
-7. `sources.py:64,75` 请求头声明 `gzip, deflate`，但只解 gzip；若上游真返回 deflate，会解出乱码并被 `errors="replace"` 静默吞掉。要么去掉 deflate，要么补 `zlib.decompress(raw, -zlib.MAX_WBITS)`。
-8. `store.parse_line()` 只校验 `symbol`/`date` 存在，不校验日期格式与数值类型；半损坏的行会一路进到 `pd.to_datetime` 才炸。
-9. `sources.py:72` 每次重试都 `ssl.create_default_context()`，握手参数重建；提到模块级常量即可（同时便于统一 CA/超时策略）。
+4. `_symbols_param()` 不去重。`?symbols=sh000300,sh000300` 会让相关矩阵拿到重复标签（`mat.loc[a,b]` 退化成 DataFrame，被 `_num` 的 `except TypeError` 吞成 `null`），同时 `alerts`、`rolling` 重复算一遍。加一句去重即可，别依赖下游容错。
+5. `_api_analysis()` 拿到的是缓存里的**同一个 dict 对象**，随后 `payload["refreshing"]=...` 属于原地修改缓存项且在锁外。建议返回 `dict(payload)` 副本。
+6. `sources.py:64,75` 请求头声明 `gzip, deflate`，但只解 gzip；若上游真返回 deflate，会解出乱码并被 `errors="replace"` 静默吞掉。要么去掉 deflate，要么补 `zlib.decompress(raw, -zlib.MAX_WBITS)`。
+7. `store.parse_line()` 只校验 `symbol`/`date` 存在，不校验日期格式与数值类型；半损坏的行会一路进到 `pd.to_datetime` 才炸。
+8. `sources.py:72` 每次重试都 `ssl.create_default_context()`，握手参数重建；提到模块级常量即可（同时便于统一 CA/超时策略）。
 
 **P3 · 死代码与文档漂移**
 
-10. 计算了但没人用：`analytics.conditional_stats()` 的结果 `conditional` 进了 payload，**前端从未渲染**（`app.js` 无相关代码）。要么补 UI（「指数下跌日黄金表现」是这套分析里最有说服力的避险证据），要么从 payload 移除。
-11. 从未被引用的配置/函数：`config.OVERLAP_DAYS`、`config.python_env_note()`、`sources.fetch_all()`（`run.py` 与 `server.py` 各自手写了循环）。删除或接上，别留着误导。
-12. `config.py:129` 注释写「前端也用这套」，但 `web/app.js:6-7` 硬编码了另一套 `STATE_COLOR`/`STATE_LABEL`，且颜色已漂移（range：`#8A8F98` vs `#5c6674`）。同理 `/api/meta` 里的 `state_colors`/`state_labels`/`windows`/`default_window`/`max_lag` 前端一个都没用。要么前端改读 `meta`，要么删掉 payload 字段。
-13. `tests/test_api.py:52` `cls.state.instruments_meta = {}` 写错了对象（应为 `cls.state.store.instruments_meta`），`AppState` 上根本没有这个属性；测试实际依赖了磁盘上真实的 `data/meta.json`，隔离性打折。`test_analytics.py:185` 的 `valid` 变量算了但没用。
-14. 仓库卫生：`.gitignore`/`.gitattributes` 已补，`data/raw/`（只写不读、逐日增长的上游快照）不入库；仍缺 `README.md` 与 `requirements.txt`。注意 `data/bars/*.jsonl` **已入库**，而每次 `fetch` 会整文件重写这 8 个文件，所以提交数据要挑时间点，否则历史迅速膨胀。
-15. `store.write_meta()` 原先漏写 `newline="\n"`，导致 `data/meta.json` 在 Windows 下是 CRLF、而 `*.jsonl` 是 LF，每次刷新都产生整文件 diff。已修（`store.py:158`），若再新增落盘代码记得同样显式指定换行。
+9. 计算了但没人用：`analytics.conditional_stats()` 的结果 `conditional` 进了 payload，**前端从未渲染**。要么补 UI（「指数下跌日黄金表现」是这套分析里最有说服力的避险证据），要么从 payload 移除。
+10. 从未被引用的配置/函数：`config.OVERLAP_DAYS`、`config.python_env_note()`、`sources.fetch_all()`（`run.py` 与 `server.py` 各自手写了循环）。删除或接上，别留着误导。
+11. `config.py` 注释写「前端也用这套」配色，但 `web/app.js:6-7` 硬编码了另一套 `STATE_COLOR`/`STATE_LABEL`，且颜色已漂移（range：`#8A8F98` vs `#5c6674`）。同理 `/api/meta` 里的 `state_colors`/`state_labels`/`windows`/`default_window`/`max_lag` 前端一个都没用。
+12. 仓库卫生：`.gitignore`/`.gitattributes`/`requirements.txt` 已补，`data/raw/`（只写不读、逐日增长的上游快照）不入库；仍缺 `README.md`。注意 `data/bars/*.jsonl` **已入库**，而每次 `fetch` 会整文件重写这 8 个文件，提交数据要挑时间点，否则历史迅速膨胀。
 
 ---
 

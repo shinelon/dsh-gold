@@ -32,15 +32,25 @@ def _setup_logging(level: str = "INFO") -> None:
 
 def cmd_serve(args: argparse.Namespace) -> int:
     _setup_logging(args.log_level)
-    if args.open:
+
+    def on_ready(url: str) -> None:
+        """端口可能被顺延，必须用 serve() 回传的真实 URL 打开浏览器。"""
+        if not args.open:
+            return
         import threading
 
         def _open() -> None:
             time.sleep(1.2)
-            webbrowser.open(f"http://{args.host}:{args.port}/")
+            webbrowser.open(url)
 
         threading.Thread(target=_open, daemon=True).start()
-    server.serve(host=args.host, port=args.port, refresh=not args.no_refresh)
+
+    server.serve(
+        host=args.host,
+        port=args.port,
+        refresh=not args.no_refresh,
+        on_ready=on_ready,
+    )
     return 0
 
 

@@ -182,7 +182,6 @@ class TestRegime(unittest.TestCase):
         ret = s.pct_change(fill_method=None)
         rows = analytics.regime_stats(ret, st)
         total = sum(r["count"] for r in rows)
-        valid = int((ret.index.isin(st[st != "na"].index)) & ret.notna().reindex(ret.index))
         self.assertEqual(total, int(((st != "na") & ret.notna()).sum()))
 
     def test_transition_rows_sum_to_one(self):
